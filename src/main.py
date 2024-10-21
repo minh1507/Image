@@ -64,7 +64,6 @@ class ResizablePixmapItem(QGraphicsPixmapItem):
         new_width = max(pos.x(), 10)
         new_height = max(pos.y(), 10)
 
-        # Maintain aspect ratio
         aspect_ratio = self.original_pixmap.width() / self.original_pixmap.height()
         if new_width / new_height > aspect_ratio:
             new_width = new_height * aspect_ratio
@@ -252,8 +251,7 @@ class ImageEditor(QMainWindow):
 
     def create_right_sidebar(self, layout):
         right_sidebar = QVBoxLayout()
-
-        # Create a grid layout for features
+        right_sidebar.setContentsMargins(10, 10, 10, 10)
         feature_grid = QGridLayout()
         feature_grid.setSpacing(10)
 
@@ -269,6 +267,7 @@ class ImageEditor(QMainWindow):
             feature_grid.addWidget(button, i // 2, i % 2)
 
         right_sidebar.addLayout(feature_grid)
+        right_sidebar.addStretch()
         layout.addLayout(right_sidebar)
 
     def create_menu_bar(self):
