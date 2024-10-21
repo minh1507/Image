@@ -1,14 +1,15 @@
 import sys
 import os
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                               QHBoxLayout, QLabel, QMenu, QFileDialog, 
+                               QHBoxLayout, QMenu, QFileDialog, 
                                QPushButton, QGraphicsView, 
-                               QGraphicsScene, QSlider, QFrame, QToolTip, QGraphicsPixmapItem, QGraphicsItem)
-from PySide6.QtGui import QAction, QPixmap, QIcon, QFont
+                               QGraphicsScene, QSlider, QFrame, QToolTip, 
+                               QGraphicsPixmapItem, QGraphicsItem, QDialog, QGridLayout, 
+                               QGraphicsRectItem, QLineEdit)  # Add this line
+from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QIntValidator
 from PySide6.QtCore import Qt, QSize, QRectF, QPointF
-
-
-from PySide6.QtWidgets import QGraphicsRectItem
+from PIL import Image, ImageEnhance  # Import Pillow modules
+from PIL.ImageQt import ImageQt  # Import ImageQt to convert Pillow image to QImage
 
 
 class ResizablePixmapItem(QGraphicsPixmapItem):
@@ -33,7 +34,7 @@ class ResizablePixmapItem(QGraphicsPixmapItem):
 
     def update_resize_handle_position(self):
         rect = self.boundingRect()
-        self.resize_handle.setPos(rect.bottomRight() - QPointF(5, 5))  # Adjust for the handle's size
+        self.resize_handle.setPos(rect.bottomRight() - QPointF(5, 5)) 
 
     def mousePressEvent(self, event):
         if self.resize_handle.isUnderMouse():
@@ -70,19 +71,53 @@ class ResizablePixmapItem(QGraphicsPixmapItem):
         else:
             new_height = new_width / aspect_ratio
 
-        # Resize the pixmap and store it
         resized_pixmap = self.original_pixmap.scaled(new_width, new_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.setPixmap(resized_pixmap)
-        self.current_pixmap = resized_pixmap  # Store the resized pixmap
+        self.current_pixmap = resized_pixmap  
 
         self.update_resize_handle_position()
 
+
+class AdjustDialog(QDialog):
+    def __init__(self, title, slider_min, slider_max, default_value, on_value_changed):
+        super().__init__()
+        self.setWindowTitle(title)
+        self.setModal(False)  
+
+        layout = QVBoxLayout(self)
+
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(slider_min, slider_max)
+        self.slider.setValue(default_value)
+        self.slider.valueChanged.connect(on_value_changed)
+        layout.addWidget(self.slider)
+
+        self.input_field = QLineEdit(self) 
+        self.input_field.setValidator(QIntValidator(slider_min, slider_max))  
+        self.input_field.setText(str(default_value))
+        self.input_field.textChanged.connect(self.on_input_changed) 
+        layout.addWidget(self.input_field)
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.close)
+        layout.addWidget(close_button)
+
+        self.setLayout(layout)
+
+    def on_input_changed(self, text):
+        if text:
+            value = int(text)
+            self.slider.setValue(value)  
 
 class ImageEditor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Photoshop-like App")
         self.setGeometry(100, 100, 1200, 800)
+
+        self.current_contrast = 50  
+        self.current_brightness = 50 
+        self.current_saturation = 50  
         
         self.setStyleSheet("""
             QMainWindow {
@@ -137,6 +172,8 @@ class ImageEditor(QMainWindow):
         self.create_right_sidebar(main_layout)
 
         self.create_menu_bar()
+
+        self.current_pixmap = None 
 
     def create_left_sidebar(self, layout):
         left_sidebar = QVBoxLayout()
@@ -216,31 +253,29 @@ class ImageEditor(QMainWindow):
     def create_right_sidebar(self, layout):
         right_sidebar = QVBoxLayout()
 
-        contrast_label = QLabel("Adjust Contrast")
-        contrast_label.setStyleSheet("color: white;")
-        contrast_slider = QSlider(Qt.Horizontal)
-        contrast_slider.setRange(-100, 100)
-        
-        grayscale_button = QPushButton("Convert to Grayscale")
-        grayscale_button.setFixedHeight(40)
+        # Create a grid layout for features
+        feature_grid = QGridLayout()
+        feature_grid.setSpacing(10)
 
-        right_sidebar.addWidget(contrast_label)
-        right_sidebar.addWidget(contrast_slider)
-        right_sidebar.addWidget(grayscale_button)
+        features = [
+            ("Contrast", self.show_contrast_popup),
+            ("Brightness", self.show_brightness_popup),
+            ("Saturation", self.show_saturation_popup),
+        ]
 
-        frame = QFrame()
-        frame.setLayout(right_sidebar)
-        frame.setFrameShape(QFrame.StyledPanel)
-        frame.setFixedWidth(200)  
+        for i, (feature_name, handler) in enumerate(features):
+            button = QPushButton(feature_name)
+            button.clicked.connect(handler)
+            feature_grid.addWidget(button, i // 2, i % 2)
 
-        layout.addWidget(frame)
+        right_sidebar.addLayout(feature_grid)
+        layout.addLayout(right_sidebar)
 
     def create_menu_bar(self):
         menubar = self.menuBar()
-
         file_menu = menubar.addMenu("File")
-        
-        import_action = QAction("Import", self)
+
+        import_action = QAction("Import Image", self)
         import_action.triggered.connect(self.import_image)
         file_menu.addAction(import_action)
 
@@ -257,16 +292,94 @@ class ImageEditor(QMainWindow):
         file_menu.addMenu(export_menu)
 
         settings_menu = menubar.addMenu("Settings")
-    
+
+    def show_contrast_popup(self):
+        self.contrast_dialog = AdjustDialog("Adjust Contrast", 0, 100, self.current_contrast, self.on_contrast_value_changed)
+        self.contrast_dialog.show()
+
+    def show_brightness_popup(self):
+        self.brightness_dialog = AdjustDialog("Adjust Brightness", 0, 100, self.current_brightness, self.on_brightness_value_changed)
+        self.brightness_dialog.show()
+
+    def show_saturation_popup(self):
+        self.saturation_dialog = AdjustDialog("Adjust Saturation", 0, 100, self.current_saturation, self.on_saturation_value_changed)
+        self.saturation_dialog.show()
+
+    def on_contrast_value_changed(self, value):
+        self.contrast_dialog.input_field.setText(str(value))  
+        if self.current_pixmap is not None:
+            if hasattr(self, 'original_pixmap'):
+                enhancer = ImageEnhance.Contrast(self.original_pixmap)
+            else:
+                self.original_pixmap = self.current_pixmap
+                enhancer = ImageEnhance.Contrast(self.original_pixmap)
+
+            scale_factor = value / 50.0 if value != 50 else 1.0
+            enhanced_image = enhancer.enhance(scale_factor)
+            self.update_image(enhanced_image)
+            self.current_pixmap = enhanced_image  
+            self.current_contrast = value  
+
+    def on_brightness_value_changed(self, value):
+        self.brightness_dialog.input_field.setText(str(value)) 
+        if self.current_pixmap is not None:
+            if hasattr(self, 'original_pixmap'):
+                enhancer = ImageEnhance.Brightness(self.original_pixmap)
+            else:
+                self.original_pixmap = self.current_pixmap
+                enhancer = ImageEnhance.Brightness(self.original_pixmap)
+
+            scale_factor = value / 50.0 if value != 50 else 1.0
+            enhanced_image = enhancer.enhance(scale_factor)
+            self.update_image(enhanced_image)
+            self.current_pixmap = enhanced_image  
+            self.current_brightness = value  
+
+    def on_saturation_value_changed(self, value):
+        self.saturation_dialog.input_field.setText(str(value))  # Update input field with slider value
+        if self.current_pixmap is not None:
+            if hasattr(self, 'original_pixmap'):
+                enhancer = ImageEnhance.Color(self.original_pixmap)
+            else:
+                self.original_pixmap = self.current_pixmap
+                enhancer = ImageEnhance.Color(self.original_pixmap)
+
+            scale_factor = value / 50.0 if value != 50 else 1.0
+            enhanced_image = enhancer.enhance(scale_factor)
+            self.update_image(enhanced_image)
+            self.current_pixmap = enhanced_image  
+            self.current_saturation = value  
 
     def import_image(self):
         image_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
         if image_path:
+            self.current_pixmap = Image.open(image_path)  # Open image with Pillow
             pixmap = QPixmap(image_path)
             self.graphics_scene.clear()
             resizable_item = ResizablePixmapItem(pixmap)
             self.graphics_scene.addItem(resizable_item)
             self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
+
+            # Reset values to normal when a new image is imported
+            self.current_contrast = 50
+            self.current_brightness = 50
+            self.current_saturation = 50
+
+            # If the dialogs are currently open, reset their sliders
+            if hasattr(self, 'contrast_dialog'):
+                self.contrast_dialog.slider.setValue(self.current_contrast)
+            if hasattr(self, 'brightness_dialog'):
+                self.brightness_dialog.slider.setValue(self.current_brightness)
+            if hasattr(self, 'saturation_dialog'):
+                self.saturation_dialog.slider.setValue(self.current_saturation)
+
+    def update_image(self, pil_image):
+        # Convert the PIL Image back to QPixmap
+        q_image = ImageQt(pil_image)
+        self.graphics_scene.clear()
+        resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
+        self.graphics_scene.addItem(resizable_item)
+        self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
 
     def export_image(self, format):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save Image as {}".format(format.upper()), "", "Image Files (*.{})".format(format))
