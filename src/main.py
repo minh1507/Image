@@ -5,18 +5,18 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QPushButton, QGraphicsView, 
                                QGraphicsScene, QSlider, QFrame, QToolTip, 
                                QGraphicsPixmapItem, QGraphicsItem, QDialog, QGridLayout, 
-                               QGraphicsRectItem, QLineEdit)  # Add this line
+                               QGraphicsRectItem, QLineEdit)  
 from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QIntValidator
 from PySide6.QtCore import Qt, QSize, QRectF, QPointF
-from PIL import Image, ImageEnhance  # Import Pillow modules
-from PIL.ImageQt import ImageQt  # Import ImageQt to convert Pillow image to QImage
+from PIL import Image, ImageEnhance 
+from PIL.ImageQt import ImageQt  
 
 
 class ResizablePixmapItem(QGraphicsPixmapItem):
     def __init__(self, pixmap):
         super().__init__(pixmap)
         self.original_pixmap = pixmap
-        self.current_pixmap = pixmap  # Store the current resized pixmap
+        self.current_pixmap = pixmap  
         self.setFlags(QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges)
         self.setCursor(Qt.SizeAllCursor)
 
@@ -336,7 +336,7 @@ class ImageEditor(QMainWindow):
             self.current_brightness = value  
 
     def on_saturation_value_changed(self, value):
-        self.saturation_dialog.input_field.setText(str(value))  # Update input field with slider value
+        self.saturation_dialog.input_field.setText(str(value))  
         if self.current_pixmap is not None:
             if hasattr(self, 'original_pixmap'):
                 enhancer = ImageEnhance.Color(self.original_pixmap)
@@ -353,19 +353,17 @@ class ImageEditor(QMainWindow):
     def import_image(self):
         image_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
         if image_path:
-            self.current_pixmap = Image.open(image_path)  # Open image with Pillow
+            self.current_pixmap = Image.open(image_path)  
             pixmap = QPixmap(image_path)
             self.graphics_scene.clear()
             resizable_item = ResizablePixmapItem(pixmap)
             self.graphics_scene.addItem(resizable_item)
             self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
 
-            # Reset values to normal when a new image is imported
             self.current_contrast = 50
             self.current_brightness = 50
             self.current_saturation = 50
 
-            # If the dialogs are currently open, reset their sliders
             if hasattr(self, 'contrast_dialog'):
                 self.contrast_dialog.slider.setValue(self.current_contrast)
             if hasattr(self, 'brightness_dialog'):
@@ -374,7 +372,6 @@ class ImageEditor(QMainWindow):
                 self.saturation_dialog.slider.setValue(self.current_saturation)
 
     def update_image(self, pil_image):
-        # Convert the PIL Image back to QPixmap
         q_image = ImageQt(pil_image)
         self.graphics_scene.clear()
         resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
