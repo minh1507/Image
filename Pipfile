@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 pyside6 = "*"
 pillow = "*"
+photoshop-python-api = "*"
 
 [dev-packages]
 

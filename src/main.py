@@ -280,13 +280,15 @@ class ImageEditor(QMainWindow):
 
         export_menu = QMenu("Export", self)
         
-        export_jpg_action = QAction("JPG", self)
-        export_jpg_action.triggered.connect(lambda: self.export_image("jpg"))
-        export_menu.addAction(export_jpg_action)
+        self.export_jpg_action = QAction("JPG", self)
+        self.export_jpg_action.setEnabled(False)  # Initially disabled
+        self.export_jpg_action.triggered.connect(lambda: self.export_image("jpg"))
+        export_menu.addAction(self.export_jpg_action)
 
-        export_png_action = QAction("PNG", self)
-        export_png_action.triggered.connect(lambda: self.export_image("png"))
-        export_menu.addAction(export_png_action)
+        self.export_png_action = QAction("PNG", self)
+        self.export_png_action.setEnabled(False)  # Initially disabled
+        self.export_png_action.triggered.connect(lambda: self.export_image("png"))
+        export_menu.addAction(self.export_png_action)
 
         file_menu.addMenu(export_menu)
 
@@ -355,13 +357,23 @@ class ImageEditor(QMainWindow):
             self.current_pixmap = Image.open(image_path)  
             pixmap = QPixmap(image_path)
             self.graphics_scene.clear()
-            resizable_item = ResizablePixmapItem(pixmap)
-            self.graphics_scene.addItem(resizable_item)
+            
+            # Set self.resizable_item when adding to the scene
+            self.resizable_item = ResizablePixmapItem(pixmap)
+            self.graphics_scene.addItem(self.resizable_item)
+
+            # Debugging: Verify that the item was added
+            print(f"[DEBUG] Added item of type {type(self.resizable_item)} to graphics scene.")
+
             self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
 
             self.current_contrast = 50
             self.current_brightness = 50
             self.current_saturation = 50
+
+            # Enable export actions
+            self.export_jpg_action.setEnabled(True)
+            self.export_png_action.setEnabled(True)
 
             if hasattr(self, 'contrast_dialog'):
                 self.contrast_dialog.slider.setValue(self.current_contrast)
@@ -373,24 +385,48 @@ class ImageEditor(QMainWindow):
     def update_image(self, pil_image):
         q_image = ImageQt(pil_image)
         self.graphics_scene.clear()
-        resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
-        self.graphics_scene.addItem(resizable_item)
+        
+        # Create and store a reference to the new ResizablePixmapItem
+        self.resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
+        self.graphics_scene.addItem(self.resizable_item)
         self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
 
     def export_image(self, format):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Image as {}".format(format.upper()), "", "Image Files (*.{})".format(format))
-        if file_path:
-            if self.graphics_scene.items():
-                resizable_item = self.graphics_scene.items()[0]  
-                if isinstance(resizable_item, ResizablePixmapItem):
-                    pixmap_to_save = resizable_item.current_pixmap
-                    if pixmap_to_save.save(file_path, format.upper()):
-                        print(f"Image saved successfully to {file_path}")
-                    else:
-                        print(f"Failed to save image to {file_path}")
-            else:
-                print("No image found to export.")
+        file_dialog = QFileDialog(self, "Save Image as {}".format(format.upper()))
+        file_dialog.setAcceptMode(QFileDialog.AcceptSave)
+        file_dialog.setNameFilter("Image Files (*.{})".format(format))
+        file_dialog.setModal(True)
+        file_dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        
+        if file_dialog.exec() == QDialog.Accepted:
+            file_path = file_dialog.selectedFiles()[0]
+            if file_path:
+                if not file_path.lower().endswith(f".{format}"):
+                    file_path += f".{format}"
+                print(f"[DEBUG] Attempting to save image to: {file_path}")
 
+                # Use the instance variable instead of checking the scene
+                if hasattr(self, 'resizable_item'):
+                    print(f"[DEBUG] Item in graphics scene: {type(self.resizable_item)}")
+                    if isinstance(self.resizable_item, ResizablePixmapItem):
+                        pixmap_to_save = self.resizable_item.current_pixmap
+                        if pixmap_to_save and not pixmap_to_save.isNull():
+                            print("[DEBUG] Pixmap is valid.")
+                            success = pixmap_to_save.save(file_path, format.upper())
+                            if success:
+                                print(f"[SUCCESS] Image saved to {file_path}")
+                            else:
+                                print(f"[ERROR] Failed to save image to {file_path}. Check format or permissions.")
+                        else:
+                            print("[ERROR] Pixmap is null or invalid. Unable to save.")
+                    else:
+                        print("[ERROR] The item is not a ResizablePixmapItem.")
+                else:
+                    print("[ERROR] No resizable item found to export.")
+            else:
+                print("[ERROR] No file path selected.")
+        else:
+            print("[INFO] File dialog was cancelled.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
