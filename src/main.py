@@ -32,6 +32,19 @@ class ResizablePixmapItem(QGraphicsPixmapItem):
 
         self.update_resize_handle_position()
 
+    def contextMenuEvent(self, event):
+        context_menu = QMenu()
+        remove_action = context_menu.addAction("Remove Image")
+        action = context_menu.exec(event.screenPos())
+        if action == remove_action:
+            self.remove_image()
+
+    def remove_image(self):
+        if self.scene():
+            self.scene().removeItem(self)
+            # Optionally delete the item
+            del self  
+
     def update_resize_handle_position(self):
         rect = self.boundingRect()
         self.resize_handle.setPos(rect.bottomRight() - QPointF(5, 5)) 
