@@ -4,10 +4,11 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QMenu, QFileDialog, 
                                QPushButton, QGraphicsView, 
                                QGraphicsScene, QFrame, QToolTip, 
-                               QGraphicsPixmapItem, QDialog, QGridLayout)  
+                               QGraphicsPixmapItem, QDialog, QGridLayout,
+                               QColorDialog, QFontDialog, QLineEdit, QLabel, QSlider)  
 from PySide6.QtGui import QAction, QPixmap, QIcon, QFont
 from PySide6.QtCore import Qt, QSize, QRectF
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
 from PIL.ImageQt import ImageQt  
 from component.crop import CropItem
 from component.resize import ResizablePixmapItem
@@ -24,11 +25,13 @@ class ImageEditor(QMainWindow):
         self.current_saturation = 50  
         self.current_sharpening = 50 
         self.current_blur = 0 
+        self.last_click_pos = None
         self.rotation_angle = 0 
         self.current_pixmap = None 
         self.original_image = None  
         self.flipped_image = None  
         self.is_flipped = False  
+        self.current_text_color = Qt.white  # Default text color
         
         self.setStyleSheet("""
             QMainWindow {
@@ -178,6 +181,7 @@ class ImageEditor(QMainWindow):
             ("Reset", self.reset_image) ,
             ("Sharpen", self.show_sharpen_popup),
             ("Blur", self.show_blur_popup),
+            ("Add Text", self.show_add_text_dialog)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -188,6 +192,53 @@ class ImageEditor(QMainWindow):
         right_sidebar.addLayout(feature_grid)
         right_sidebar.addStretch()
         layout.addLayout(right_sidebar)
+    
+    def show_add_text_dialog(self):
+        text_dialog = QDialog(self)
+        text_dialog.setWindowTitle("Add Text to Image")
+        text_dialog.setGeometry(300, 300, 300, 150)
+        layout = QVBoxLayout()
+
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("Enter text here...")
+        layout.addWidget(self.text_input)
+
+        add_text_button = QPushButton("Add Text")
+        add_text_button.clicked.connect(lambda: self.add_text_to_image(self.text_input.text()))
+        layout.addWidget(add_text_button)
+
+        text_dialog.setLayout(layout)
+        text_dialog.exec()
+
+
+    def choose_color(self):
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.current_text_color = color
+
+
+    def choose_font(self):
+        """Open a dialog for font selection."""
+        font, ok = QFontDialog.getFont()  
+        if ok:  
+            self.selected_font = font  
+            print(f"Selected font: {font.family()}, size: {font.pointSize()}")
+
+
+    def add_text_to_image(self, text):
+        if self.current_pixmap is not None:
+            q_image = self.current_pixmap.toqimage()  
+            pil_image = Image.frombytes("RGBA", (q_image.width(), q_image.height()), 
+                                        q_image.bits(), "raw", "BGRA", 0, 1)
+
+            draw = ImageDraw.Draw(pil_image)
+            font = ImageFont.load_default()
+            text_position = (10, 10)  
+            text_color = (255, 255, 255)  
+            draw.text(text_position, text, fill=text_color, font=font)
+
+            self.update_image(pil_image)  
+
 
     def reset_image(self):
         """Reset the image to its original state."""
@@ -480,11 +531,18 @@ class ImageEditor(QMainWindow):
                 self.saturation_dialog.slider.setValue(self.current_saturation)
 
     def update_image(self, pil_image):
-        q_image = ImageQt(pil_image)
+        """Updates the display with the new PIL image."""
         
-        self.resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
+        q_image = ImageQt(pil_image)
+        pixmap = QPixmap.fromImage(q_image)
+        
+        self.graphics_scene.clear() 
+        
+        self.resizable_item = ResizablePixmapItem(pixmap)
         self.graphics_scene.addItem(self.resizable_item)
+        
         self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
+
 
     def export_image(self, format):
         file_dialog = QFileDialog(self, "Save Image as {}".format(format.upper()))
