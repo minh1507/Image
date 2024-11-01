@@ -5,12 +5,65 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QPushButton, QGraphicsView, 
                                QGraphicsScene, QSlider, QFrame, QToolTip, 
                                QGraphicsPixmapItem, QGraphicsItem, QDialog, QGridLayout, 
-                               QGraphicsRectItem, QLineEdit)  
-from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QIntValidator
+                               QGraphicsRectItem, QLineEdit, QRadioButton)  
+from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QIntValidator, QTransform
 from PySide6.QtCore import Qt, QSize, QRectF, QPointF
 from PIL import Image, ImageEnhance 
 from PIL.ImageQt import ImageQt  
 
+class FlipDialog(QDialog):
+    def __init__(self, on_flip):
+        super().__init__()
+        self.setWindowTitle("Flip Image")
+        self.setModal(True)
+
+        layout = QVBoxLayout()
+
+        self.flip_horizontal_radio = QRadioButton("Flip Horizontal")
+        self.flip_vertical_radio = QRadioButton("Flip Vertical")
+
+        layout.addWidget(self.flip_horizontal_radio)
+        layout.addWidget(self.flip_vertical_radio)
+
+        confirm_button = QPushButton("Confirm")
+        confirm_button.clicked.connect(lambda: self.confirm(on_flip))
+        layout.addWidget(confirm_button)
+
+        self.setLayout(layout)
+
+    def confirm(self, on_flip):
+        if self.flip_horizontal_radio.isChecked():
+            on_flip("horizontal")
+        elif self.flip_vertical_radio.isChecked():
+            on_flip("vertical")
+        self.accept()
+
+class RotateDialog(QDialog):
+    def __init__(self, on_rotate):
+        super().__init__()
+        self.setWindowTitle("Rotate Image")
+        self.setModal(True)
+
+        layout = QVBoxLayout()
+
+        self.rotate_left_radio = QRadioButton("Rotate Left 45°")
+        self.rotate_right_radio = QRadioButton("Rotate Right 45°")
+
+        layout.addWidget(self.rotate_left_radio)
+        layout.addWidget(self.rotate_right_radio)
+
+        confirm_button = QPushButton("Confirm")
+        confirm_button.clicked.connect(lambda: self.confirm(on_rotate))
+        layout.addWidget(confirm_button)
+
+        self.setLayout(layout)
+
+    def confirm(self, on_rotate):
+        if self.rotate_left_radio.isChecked():
+            on_rotate("left")
+        elif self.rotate_right_radio.isChecked():
+            on_rotate("right")
+        self.accept()
 
 class ResizablePixmapItem(QGraphicsPixmapItem):
     def __init__(self, pixmap):
@@ -130,6 +183,11 @@ class ImageEditor(QMainWindow):
         self.current_contrast = 50  
         self.current_brightness = 50 
         self.current_saturation = 50  
+        self.rotation_angle = 0 
+        self.current_pixmap = None 
+        self.original_image = None  
+        self.flipped_image = None  
+        self.is_flipped = False  
         
         self.setStyleSheet("""
             QMainWindow {
@@ -272,7 +330,9 @@ class ImageEditor(QMainWindow):
             ("Contrast", self.show_contrast_popup),
             ("Brightness", self.show_brightness_popup),
             ("Saturation", self.show_saturation_popup),
-            ("Grayscale", self.convert_to_grayscale)
+            ("Grayscale", self.convert_to_grayscale),
+            ("Flip", self.show_flip_dialog),  
+            ("Rotate", self.show_rotate_dialog) 
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -295,12 +355,12 @@ class ImageEditor(QMainWindow):
         export_menu = QMenu("Export", self)
         
         self.export_jpg_action = QAction("JPG", self)
-        self.export_jpg_action.setEnabled(False)  # Initially disabled
+        self.export_jpg_action.setEnabled(False)  
         self.export_jpg_action.triggered.connect(lambda: self.export_image("jpg"))
         export_menu.addAction(self.export_jpg_action)
 
         self.export_png_action = QAction("PNG", self)
-        self.export_png_action.setEnabled(False)  # Initially disabled
+        self.export_png_action.setEnabled(False)  
         self.export_png_action.triggered.connect(lambda: self.export_image("png"))
         export_menu.addAction(self.export_png_action)
 
@@ -319,6 +379,72 @@ class ImageEditor(QMainWindow):
     def show_saturation_popup(self):
         self.saturation_dialog = AdjustDialog("Adjust Saturation", 0, 100, self.current_saturation, self.on_saturation_value_changed)
         self.saturation_dialog.show()
+
+    def show_flip_dialog(self):
+        flip_popup = QDialog(self)
+        flip_popup.setWindowTitle("Flip Image")
+        flip_popup.setGeometry(300, 300, 200, 150)
+        layout = QVBoxLayout()
+
+        flip_horizontal_button = QPushButton("Flip Horizontal")
+        flip_horizontal_button.clicked.connect(lambda: self.apply_flip("horizontal"))
+        layout.addWidget(flip_horizontal_button)
+
+        flip_vertical_button = QPushButton("Flip Vertical")
+        flip_vertical_button.clicked.connect(lambda: self.apply_flip("vertical"))
+        layout.addWidget(flip_vertical_button)
+
+        flip_popup.setLayout(layout)
+        flip_popup.exec()  
+
+    def show_rotate_dialog(self):
+        rotate_popup = QDialog(self)
+        rotate_popup.setWindowTitle("Rotate Image")
+        rotate_popup.setGeometry(300, 300, 200, 150)
+        layout = QVBoxLayout()
+
+        rotate_left_button = QPushButton("Rotate Left 90°")
+        rotate_left_button.clicked.connect(lambda: self.apply_rotate("left"))
+        layout.addWidget(rotate_left_button)
+
+        rotate_right_button = QPushButton("Rotate Right 90°")
+        rotate_right_button.clicked.connect(lambda: self.apply_rotate("right"))
+        layout.addWidget(rotate_right_button)
+
+        rotate_popup.setLayout(layout)
+        rotate_popup.exec_()  
+
+    def apply_flip(self, direction):
+        if self.current_pixmap is not None:
+            q_image = self.current_pixmap.toqimage()  
+            pil_image = Image.frombytes("RGBA", (q_image.width(), q_image.height()), 
+                                         q_image.bits(), "raw", "BGRA", 0, 1)
+
+            if not self.is_flipped:
+                self.original_image = pil_image
+
+                if direction == "horizontal":
+                    self.flipped_image = pil_image.transpose(Image.FLIP_LEFT_RIGHT)
+                elif direction == "vertical":
+                    self.flipped_image = pil_image.transpose(Image.FLIP_TOP_BOTTOM)
+
+                self.update_image(self.flipped_image)  
+            else:
+                self.update_image(self.original_image)  
+            
+            self.is_flipped = not self.is_flipped
+
+    def apply_rotate(self, direction):
+        if self.current_pixmap is not None:
+            if direction == "left":
+                self.rotation_angle -= 90 
+            elif direction == "right":
+                self.rotation_angle += 90  
+
+            self.rotation_angle %= 360  
+
+            transformed_image = self.current_pixmap.rotate(self.rotation_angle, expand=True)
+            self.update_image(transformed_image)
     
     def convert_to_grayscale(self):
         if self.current_pixmap is not None:
@@ -377,11 +503,9 @@ class ImageEditor(QMainWindow):
             pixmap = QPixmap(image_path)
             self.graphics_scene.clear()
             
-            # Set self.resizable_item when adding to the scene
             self.resizable_item = ResizablePixmapItem(pixmap)
             self.graphics_scene.addItem(self.resizable_item)
 
-            # Debugging: Verify that the item was added
             print(f"[DEBUG] Added item of type {type(self.resizable_item)} to graphics scene.")
 
             self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
@@ -390,7 +514,6 @@ class ImageEditor(QMainWindow):
             self.current_brightness = 50
             self.current_saturation = 50
 
-            # Enable export actions
             self.export_jpg_action.setEnabled(True)
             self.export_png_action.setEnabled(True)
 
@@ -405,7 +528,6 @@ class ImageEditor(QMainWindow):
         q_image = ImageQt(pil_image)
         self.graphics_scene.clear()
         
-        # Create and store a reference to the new ResizablePixmapItem
         self.resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
         self.graphics_scene.addItem(self.resizable_item)
         self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
@@ -424,7 +546,6 @@ class ImageEditor(QMainWindow):
                     file_path += f".{format}"
                 print(f"[DEBUG] Attempting to save image to: {file_path}")
 
-                # Use the instance variable instead of checking the scene
                 if hasattr(self, 'resizable_item'):
                     print(f"[DEBUG] Item in graphics scene: {type(self.resizable_item)}")
                     if isinstance(self.resizable_item, ResizablePixmapItem):
