@@ -5,8 +5,9 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QPushButton, QGraphicsView, 
                                QGraphicsScene, QFrame, QToolTip, 
                                QGraphicsPixmapItem, QDialog, QGridLayout,
-                               QColorDialog, QFontDialog, QLineEdit, QLabel, QSlider)  
-from PySide6.QtGui import QAction, QPixmap, QIcon, QFont
+                               QColorDialog, QFontDialog, QLineEdit, QLabel, QSlider,
+                               QMessageBox)  
+from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QTransform
 from PySide6.QtCore import Qt, QSize, QRectF
 from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
 from PIL.ImageQt import ImageQt  
@@ -181,7 +182,8 @@ class ImageEditor(QMainWindow):
             ("Reset", self.reset_image) ,
             ("Sharpen", self.show_sharpen_popup),
             ("Blur", self.show_blur_popup),
-            ("Add Text", self.show_add_text_dialog)
+            ("Add Text", self.show_add_text_dialog),
+            ("Pick Color", self.activate_color_picker)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -192,7 +194,34 @@ class ImageEditor(QMainWindow):
         right_sidebar.addLayout(feature_grid)
         right_sidebar.addStretch()
         layout.addLayout(right_sidebar)
+
+    def activate_color_picker(self):
+        self.graphics_view.setCursor(Qt.CrossCursor)  # Set cursor to crosshair for color picking
+        self.graphics_view.mousePressEvent = self.pick_color_from_image
     
+    def pick_color_from_image(self, event):
+    # Check if there is a current image loaded
+        if self.current_pixmap is not None:
+            # Get the click position in the QGraphicsView coordinates
+            pos = event.pos()
+            scene_pos = self.graphics_view.mapToScene(pos)
+
+            # Retrieve the color at the scene position
+            item = self.graphics_scene.itemAt(scene_pos, QTransform())
+            if isinstance(item, QGraphicsPixmapItem):
+                pixmap = item.pixmap()
+                x = int(scene_pos.x())
+                y = int(scene_pos.y())
+                if 0 <= x < pixmap.width() and 0 <= y < pixmap.height():
+                    color = pixmap.toImage().pixelColor(x, y)
+                    self.current_text_color = color  # Set the picked color as the current text color
+                    self.graphics_view.setCursor(Qt.ArrowCursor)  # Reset the cursor back to default
+                    self.show_color_picked_message(color)
+
+    def show_color_picked_message(self, color):
+        color_message = f"Picked Color - R: {color.red()}, G: {color.green()}, B: {color.blue()}"
+        QMessageBox.information(self, "Color Picked", color_message)
+
     def show_add_text_dialog(self):
         text_dialog = QDialog(self)
         text_dialog.setWindowTitle("Add Text to Image")
