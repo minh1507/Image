@@ -23,6 +23,7 @@ class ImageEditor(QMainWindow):
         self.current_brightness = 50 
         self.current_saturation = 50  
         self.current_sharpening = 50 
+        self.current_blur = 0 
         self.rotation_angle = 0 
         self.current_pixmap = None 
         self.original_image = None  
@@ -175,7 +176,8 @@ class ImageEditor(QMainWindow):
             ("Rotate", self.show_rotate_dialog),
             ("Crop", self.show_crop_dialog), 
             ("Reset", self.reset_image) ,
-            ("Sharpen", self.show_sharpen_popup)
+            ("Sharpen", self.show_sharpen_popup),
+            ("Blur", self.show_blur_popup)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -225,6 +227,11 @@ class ImageEditor(QMainWindow):
         file_menu.addMenu(export_menu)
 
         settings_menu = menubar.addMenu("Settings")
+
+    def show_blur_popup(self):
+        """Show a dialog to adjust the blur."""
+        self.blur_dialog = AdjustDialog("Adjust Blur", 0, 100, self.current_blur, self.on_blur_value_changed)
+        self.blur_dialog.show()
 
     def show_contrast_popup(self):
         self.contrast_dialog = AdjustDialog("Adjust Contrast", 0, 100, self.current_contrast, self.on_contrast_value_changed)
@@ -379,6 +386,27 @@ class ImageEditor(QMainWindow):
             gray_image = self.current_pixmap.convert("L")  
             self.update_image(gray_image)
 
+    def on_blur_value_changed(self, value):
+        self.blur_dialog.input_field.setText(str(value))
+
+        if self.current_pixmap is not None:
+            if hasattr(self, 'original_pixmap'):
+                pil_image = self.original_pixmap
+            else:
+                self.original_pixmap = self.current_pixmap
+                pil_image = self.original_pixmap
+
+            q_image = pil_image.toqimage()
+            pil_image = Image.frombytes("RGBA", (q_image.width(), q_image.height()),
+                                        q_image.bits(), "raw", "BGRA", 0, 1)
+
+            blur_radius = value / 20.0  
+            blurred_image = pil_image.filter(ImageFilter.GaussianBlur(blur_radius))  
+
+            self.update_image(blurred_image)  
+            self.current_pixmap = blurred_image  
+            self.current_blur = value  
+            
     def on_contrast_value_changed(self, value):
         self.contrast_dialog.input_field.setText(str(value))  
         if self.current_pixmap is not None:
