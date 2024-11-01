@@ -196,17 +196,14 @@ class ImageEditor(QMainWindow):
         layout.addLayout(right_sidebar)
 
     def activate_color_picker(self):
-        self.graphics_view.setCursor(Qt.CrossCursor)  # Set cursor to crosshair for color picking
+        self.graphics_view.setCursor(Qt.CrossCursor)  
         self.graphics_view.mousePressEvent = self.pick_color_from_image
     
     def pick_color_from_image(self, event):
-    # Check if there is a current image loaded
         if self.current_pixmap is not None:
-            # Get the click position in the QGraphicsView coordinates
             pos = event.pos()
             scene_pos = self.graphics_view.mapToScene(pos)
 
-            # Retrieve the color at the scene position
             item = self.graphics_scene.itemAt(scene_pos, QTransform())
             if isinstance(item, QGraphicsPixmapItem):
                 pixmap = item.pixmap()
@@ -214,13 +211,26 @@ class ImageEditor(QMainWindow):
                 y = int(scene_pos.y())
                 if 0 <= x < pixmap.width() and 0 <= y < pixmap.height():
                     color = pixmap.toImage().pixelColor(x, y)
-                    self.current_text_color = color  # Set the picked color as the current text color
-                    self.graphics_view.setCursor(Qt.ArrowCursor)  # Reset the cursor back to default
+                    self.current_text_color = color  
+                    self.graphics_view.setCursor(Qt.ArrowCursor) 
                     self.show_color_picked_message(color)
 
     def show_color_picked_message(self, color):
-        color_message = f"Picked Color - R: {color.red()}, G: {color.green()}, B: {color.blue()}"
-        QMessageBox.information(self, "Color Picked", color_message)
+        rgb_value = f"RGB({color.red()}, {color.green()}, {color.blue()})"
+        color_message = f"Color: {rgb_value}"
+
+        message_box = QMessageBox(self)
+        message_box.setWindowTitle("Color Picked")
+        message_box.setText(color_message)
+
+        copy_button = message_box.addButton("Copy", QMessageBox.ActionRole)
+        message_box.addButton(QMessageBox.Ok)
+
+        message_box.exec_()
+
+        if message_box.clickedButton() == copy_button:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(rgb_value)
 
     def show_add_text_dialog(self):
         text_dialog = QDialog(self)
