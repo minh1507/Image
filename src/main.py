@@ -190,13 +190,11 @@ class ImageEditor(QMainWindow):
     def reset_image(self):
         """Reset the image to its original state."""
         if self.original_image is not None:
-            self.update_image(self.original_image)  # Use the original image for resetting
-            # Reset enhancement values to default
+            self.update_image(self.original_image)  
             self.current_contrast = 50
             self.current_brightness = 50
             self.current_saturation = 50
             self.current_sharpening = 50 
-            # Reset sliders in dialogs if they exist
             if hasattr(self, 'contrast_dialog'):
                 self.contrast_dialog.slider.setValue(self.current_contrast)
             if hasattr(self, 'brightness_dialog'):
@@ -429,8 +427,8 @@ class ImageEditor(QMainWindow):
     def import_image(self):
         image_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
         if image_path:
-            self.original_image = Image.open(image_path)  # Store the original image here
-            self.current_pixmap = self.original_image  # Use original image for current_pixmap
+            self.original_image = Image.open(image_path)  
+            self.current_pixmap = self.original_image  
             pixmap = QPixmap(image_path)
             self.graphics_scene.clear()
             
@@ -439,7 +437,6 @@ class ImageEditor(QMainWindow):
 
             self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
 
-            # Reset enhancement values to defaults
             self.current_contrast = 50
             self.current_brightness = 50
             self.current_saturation = 50
@@ -447,7 +444,6 @@ class ImageEditor(QMainWindow):
             self.export_jpg_action.setEnabled(True)
             self.export_png_action.setEnabled(True)
 
-            # Update sliders if dialogs are open
             if hasattr(self, 'contrast_dialog'):
                 self.contrast_dialog.slider.setValue(self.current_contrast)
             if hasattr(self, 'brightness_dialog'):
