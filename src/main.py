@@ -177,7 +177,7 @@ class ImageEditor(QMainWindow):
             ("Crop", self.show_crop_dialog), 
             ("Reset", self.reset_image) ,
             ("Sharpen", self.show_sharpen_popup),
-            ("Blur", self.show_blur_popup)
+            ("Blur", self.show_blur_popup),
         ]
 
         for i, (feature_name, handler) in enumerate(features):
