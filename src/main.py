@@ -272,6 +272,7 @@ class ImageEditor(QMainWindow):
             ("Contrast", self.show_contrast_popup),
             ("Brightness", self.show_brightness_popup),
             ("Saturation", self.show_saturation_popup),
+            ("Grayscale", self.convert_to_grayscale)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -318,6 +319,11 @@ class ImageEditor(QMainWindow):
     def show_saturation_popup(self):
         self.saturation_dialog = AdjustDialog("Adjust Saturation", 0, 100, self.current_saturation, self.on_saturation_value_changed)
         self.saturation_dialog.show()
+    
+    def convert_to_grayscale(self):
+        if self.current_pixmap is not None:
+            gray_image = self.current_pixmap.convert("L")  
+            self.update_image(gray_image)
 
     def on_contrast_value_changed(self, value):
         self.contrast_dialog.input_field.setText(str(value))  
