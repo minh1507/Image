@@ -12,6 +12,7 @@ from PIL.ImageQt import ImageQt
 from component.crop import CropItem
 from component.resize import ResizablePixmapItem
 from component.adjust import AdjustDialog
+
 class ImageEditor(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -172,6 +173,7 @@ class ImageEditor(QMainWindow):
             ("Flip", self.show_flip_dialog),  
             ("Rotate", self.show_rotate_dialog),
             ("Crop", self.show_crop_dialog), 
+            ("Reset", self.reset_image) 
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -182,6 +184,22 @@ class ImageEditor(QMainWindow):
         right_sidebar.addLayout(feature_grid)
         right_sidebar.addStretch()
         layout.addLayout(right_sidebar)
+
+    def reset_image(self):
+        """Reset the image to its original state."""
+        if self.original_image is not None:
+            self.update_image(self.original_image)  # Use the original image for resetting
+            # Reset enhancement values to default
+            self.current_contrast = 50
+            self.current_brightness = 50
+            self.current_saturation = 50
+            # Reset sliders in dialogs if they exist
+            if hasattr(self, 'contrast_dialog'):
+                self.contrast_dialog.slider.setValue(self.current_contrast)
+            if hasattr(self, 'brightness_dialog'):
+                self.brightness_dialog.slider.setValue(self.current_brightness)
+            if hasattr(self, 'saturation_dialog'):
+                self.saturation_dialog.slider.setValue(self.current_saturation)
 
     def create_menu_bar(self):
         menubar = self.menuBar()
@@ -383,17 +401,17 @@ class ImageEditor(QMainWindow):
     def import_image(self):
         image_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
         if image_path:
-            self.current_pixmap = Image.open(image_path)  
+            self.original_image = Image.open(image_path)  # Store the original image here
+            self.current_pixmap = self.original_image  # Use original image for current_pixmap
             pixmap = QPixmap(image_path)
             self.graphics_scene.clear()
             
             self.resizable_item = ResizablePixmapItem(pixmap)
             self.graphics_scene.addItem(self.resizable_item)
 
-            print(f"[DEBUG] Added item of type {type(self.resizable_item)} to graphics scene.")
-
             self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
 
+            # Reset enhancement values to defaults
             self.current_contrast = 50
             self.current_brightness = 50
             self.current_saturation = 50
@@ -401,6 +419,7 @@ class ImageEditor(QMainWindow):
             self.export_jpg_action.setEnabled(True)
             self.export_png_action.setEnabled(True)
 
+            # Update sliders if dialogs are open
             if hasattr(self, 'contrast_dialog'):
                 self.contrast_dialog.slider.setValue(self.current_contrast)
             if hasattr(self, 'brightness_dialog'):
