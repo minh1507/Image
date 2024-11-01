@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QGraphicsPixmapItem, QDialog, QGridLayout)  
 from PySide6.QtGui import QAction, QPixmap, QIcon, QFont
 from PySide6.QtCore import Qt, QSize, QRectF
-from PIL import Image, ImageEnhance 
+from PIL import Image, ImageEnhance, ImageFilter
 from PIL.ImageQt import ImageQt  
 from component.crop import CropItem
 from component.resize import ResizablePixmapItem
@@ -22,6 +22,7 @@ class ImageEditor(QMainWindow):
         self.current_contrast = 50  
         self.current_brightness = 50 
         self.current_saturation = 50  
+        self.current_sharpening = 50 
         self.rotation_angle = 0 
         self.current_pixmap = None 
         self.original_image = None  
@@ -173,7 +174,8 @@ class ImageEditor(QMainWindow):
             ("Flip", self.show_flip_dialog),  
             ("Rotate", self.show_rotate_dialog),
             ("Crop", self.show_crop_dialog), 
-            ("Reset", self.reset_image) 
+            ("Reset", self.reset_image) ,
+            ("Sharpen", self.show_sharpen_popup)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -193,6 +195,7 @@ class ImageEditor(QMainWindow):
             self.current_contrast = 50
             self.current_brightness = 50
             self.current_saturation = 50
+            self.current_sharpening = 50 
             # Reset sliders in dialogs if they exist
             if hasattr(self, 'contrast_dialog'):
                 self.contrast_dialog.slider.setValue(self.current_contrast)
@@ -236,7 +239,32 @@ class ImageEditor(QMainWindow):
     def show_saturation_popup(self):
         self.saturation_dialog = AdjustDialog("Adjust Saturation", 0, 100, self.current_saturation, self.on_saturation_value_changed)
         self.saturation_dialog.show()
-    
+
+    def show_sharpen_popup(self):
+        """Open a dialog to adjust sharpening amount."""
+        self.sharpen_dialog = AdjustDialog("Adjust Sharpening", 0, 100, self.current_sharpening, self.on_sharpen_value_changed)
+        self.sharpen_dialog.show()
+
+    def on_sharpen_value_changed(self, value):
+        self.sharpen_dialog.input_field.setText(str(value))
+
+        if self.current_pixmap is not None:
+            q_image = self.current_pixmap.toqimage()
+            pil_image = Image.frombytes("RGBA", (q_image.width(), q_image.height()),
+                                        q_image.bits(), "raw", "BGRA", 0, 1)
+
+            enhancer = ImageEnhance.Sharpness(self.original_image)
+
+            scale_factor = (value - 50) / 50.0 + 1.0
+
+            scale_factor = max(0.0, min(scale_factor, 2.0))
+
+            sharpened_image = enhancer.enhance(scale_factor)
+
+            self.update_image(sharpened_image)
+            self.current_pixmap = sharpened_image  
+            self.current_sharpening = value  
+            
     def show_crop_dialog(self):
         self.crop_item = CropItem()
         self.graphics_scene.addItem(self.crop_item)
@@ -429,7 +457,6 @@ class ImageEditor(QMainWindow):
 
     def update_image(self, pil_image):
         q_image = ImageQt(pil_image)
-        self.graphics_scene.clear()
         
         self.resizable_item = ResizablePixmapItem(QPixmap.fromImage(q_image))
         self.graphics_scene.addItem(self.resizable_item)
