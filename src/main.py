@@ -6,64 +6,54 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QGraphicsScene, QSlider, QFrame, QToolTip, 
                                QGraphicsPixmapItem, QGraphicsItem, QDialog, QGridLayout, 
                                QGraphicsRectItem, QLineEdit, QRadioButton)  
-from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QIntValidator, QTransform
+from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QIntValidator, QPen, QColor
 from PySide6.QtCore import Qt, QSize, QRectF, QPointF
 from PIL import Image, ImageEnhance 
 from PIL.ImageQt import ImageQt  
 
-class FlipDialog(QDialog):
-    def __init__(self, on_flip):
+class CropItem(QGraphicsRectItem):
+    def __init__(self):
         super().__init__()
-        self.setWindowTitle("Flip Image")
-        self.setModal(True)
+        self.setPen(QPen(Qt.red, 2, Qt.DashLine))
+        self.setBrush(QColor(255, 0, 0, 50)) 
+        self.setFlag(QGraphicsItem.ItemIsMovable)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
+        self.resizing = False
+        self.resize_handle = QGraphicsRectItem(self)
+        self.resize_handle.setRect(QRectF(-5, -5, 10, 10))
+        self.resize_handle.setBrush(Qt.darkGray)
+        self.resize_handle.setPen(Qt.NoPen)
+        self.resize_handle.setCursor(Qt.SizeFDiagCursor)
+        self.update_resize_handle_position()
 
-        layout = QVBoxLayout()
+    def update_resize_handle_position(self):
+        rect = self.rect()
+        self.resize_handle.setPos(rect.bottomRight() - QPointF(5, 5)) 
 
-        self.flip_horizontal_radio = QRadioButton("Flip Horizontal")
-        self.flip_vertical_radio = QRadioButton("Flip Vertical")
+    def mousePressEvent(self, event):
+        if self.resize_handle.isUnderMouse():
+            self.resizing = True
+            self.resize_start_pos = event.pos()
+            self.setCursor(Qt.SizeFDiagCursor)
+            return
+        super().mousePressEvent(event)
 
-        layout.addWidget(self.flip_horizontal_radio)
-        layout.addWidget(self.flip_vertical_radio)
+    def mouseMoveEvent(self, event):
+        if self.resizing:
+            self.resize(event.pos())
+        else:
+            super().mouseMoveEvent(event)
 
-        confirm_button = QPushButton("Confirm")
-        confirm_button.clicked.connect(lambda: self.confirm(on_flip))
-        layout.addWidget(confirm_button)
+    def mouseReleaseEvent(self, event):
+        self.resizing = False
+        self.setCursor(Qt.ArrowCursor)
 
-        self.setLayout(layout)
-
-    def confirm(self, on_flip):
-        if self.flip_horizontal_radio.isChecked():
-            on_flip("horizontal")
-        elif self.flip_vertical_radio.isChecked():
-            on_flip("vertical")
-        self.accept()
-
-class RotateDialog(QDialog):
-    def __init__(self, on_rotate):
-        super().__init__()
-        self.setWindowTitle("Rotate Image")
-        self.setModal(True)
-
-        layout = QVBoxLayout()
-
-        self.rotate_left_radio = QRadioButton("Rotate Left 45°")
-        self.rotate_right_radio = QRadioButton("Rotate Right 45°")
-
-        layout.addWidget(self.rotate_left_radio)
-        layout.addWidget(self.rotate_right_radio)
-
-        confirm_button = QPushButton("Confirm")
-        confirm_button.clicked.connect(lambda: self.confirm(on_rotate))
-        layout.addWidget(confirm_button)
-
-        self.setLayout(layout)
-
-    def confirm(self, on_rotate):
-        if self.rotate_left_radio.isChecked():
-            on_rotate("left")
-        elif self.rotate_right_radio.isChecked():
-            on_rotate("right")
-        self.accept()
+    def resize(self, pos):
+        rect = self.rect()
+        new_rect = QRectF(rect.topLeft(), pos)
+        if new_rect.width() > 10 and new_rect.height() > 10:
+            self.setRect(new_rect.normalized())
+            self.update_resize_handle_position()
 
 class ResizablePixmapItem(QGraphicsPixmapItem):
     def __init__(self, pixmap):
@@ -95,7 +85,6 @@ class ResizablePixmapItem(QGraphicsPixmapItem):
     def remove_image(self):
         if self.scene():
             self.scene().removeItem(self)
-            # Optionally delete the item
             del self  
 
     def update_resize_handle_position(self):
@@ -141,7 +130,6 @@ class ResizablePixmapItem(QGraphicsPixmapItem):
         self.current_pixmap = resized_pixmap  
 
         self.update_resize_handle_position()
-
 
 class AdjustDialog(QDialog):
     def __init__(self, title, slider_min, slider_max, default_value, on_value_changed):
@@ -332,7 +320,8 @@ class ImageEditor(QMainWindow):
             ("Saturation", self.show_saturation_popup),
             ("Grayscale", self.convert_to_grayscale),
             ("Flip", self.show_flip_dialog),  
-            ("Rotate", self.show_rotate_dialog) 
+            ("Rotate", self.show_rotate_dialog),
+            ("Crop", self.show_crop_dialog), 
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -379,6 +368,40 @@ class ImageEditor(QMainWindow):
     def show_saturation_popup(self):
         self.saturation_dialog = AdjustDialog("Adjust Saturation", 0, 100, self.current_saturation, self.on_saturation_value_changed)
         self.saturation_dialog.show()
+    
+    def show_crop_dialog(self):
+        self.crop_item = CropItem()
+        self.graphics_scene.addItem(self.crop_item)
+        self.graphics_view.setScene(self.graphics_scene)
+        self.crop_item.setRect(QRectF(50, 50, 100, 100))  
+        self.crop_item.update_resize_handle_position()
+
+        confirm_button = QPushButton("Confirm Crop")
+        confirm_button.clicked.connect(self.confirm_crop)
+
+        cancel_button = QPushButton("Cancel Crop")
+        cancel_button.clicked.connect(self.cancel_crop)
+
+        self.graphics_scene.addItem(QGraphicsPixmapItem(self.current_pixmap))  
+
+        self.graphics_view.setScene(self.graphics_scene)  
+
+        self.graphics_view.setDragMode(QGraphicsView.RubberBandDrag)
+
+        confirm_button.setGeometry(QRectF(10, 10, 100, 30))
+        cancel_button.setGeometry(QRectF(120, 10, 100, 30))
+    
+    def confirm_crop(self):
+        if self.original_image and self.crop_item:
+            rect = self.crop_item.rect().toRect()
+            cropped_image = self.original_image.crop((rect.x(), rect.y(), rect.x() + rect.width(), rect.y() + rect.height()))
+            self.original_image = cropped_image
+            self.update_image_display()
+            self.graphics_scene.removeItem(self.crop_item)
+
+    def cancel_crop(self):
+        if self.crop_item:
+            self.graphics_scene.removeItem(self.crop_item)
 
     def show_flip_dialog(self):
         flip_popup = QDialog(self)
@@ -445,7 +468,18 @@ class ImageEditor(QMainWindow):
 
             transformed_image = self.current_pixmap.rotate(self.rotation_angle, expand=True)
             self.update_image(transformed_image)
-    
+
+    def crop_image(self):
+        if self.current_pixmap is not None:
+            width, height = self.current_pixmap.size
+            left = width // 4
+            top = height // 4
+            right = width * 3 // 4
+            bottom = height * 3 // 4
+
+            self.current_pixmap = self.current_pixmap.crop((left, top, right, bottom))
+            self.update_image(self.current_pixmap)
+        
     def convert_to_grayscale(self):
         if self.current_pixmap is not None:
             gray_image = self.current_pixmap.convert("L")  
