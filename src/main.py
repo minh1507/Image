@@ -261,7 +261,6 @@ class ImageEditor(QMainWindow):
         text_dialog.setLayout(layout)
         text_dialog.exec()
 
-
     def choose_color(self):
         color = QColorDialog.getColor()
         if color.isValid():
@@ -274,7 +273,6 @@ class ImageEditor(QMainWindow):
         if ok:  
             self.selected_font = font  
             print(f"Selected font: {font.family()}, size: {font.pointSize()}")
-
 
     def add_text_to_image(self, text):
         if self.current_pixmap is not None:
@@ -289,7 +287,6 @@ class ImageEditor(QMainWindow):
             draw.text(text_position, text, fill=text_color, font=font)
 
             self.update_image(pil_image)  
-
 
     def reset_image(self):
         """Reset the image to its original state."""
@@ -412,7 +409,6 @@ class ImageEditor(QMainWindow):
             return (rect.x(), rect.y(), rect.width(), rect.height())
         return None
 
-
     def confirm_crop(self):
         """Confirm cropping, update the image, and remove the crop overlay."""
         if self.crop_item is not None:
@@ -444,8 +440,6 @@ class ImageEditor(QMainWindow):
         else:
             print("No crop item to confirm.")
 
-
-
     def cancel_crop(self):
         """Cancel cropping and remove crop overlay and buttons."""
         if self.crop_item is not None:
@@ -463,9 +457,6 @@ class ImageEditor(QMainWindow):
         if hasattr(self, 'crop_widget') and self.crop_widget is not None:
             self.crop_widget.hide()
             self.crop_widget = None 
-
-             
-
 
     def show_flip_dialog(self):
         flip_popup = QDialog(self)
@@ -654,7 +645,6 @@ class ImageEditor(QMainWindow):
         self.graphics_scene.addItem(self.resizable_item)
         
         self.graphics_view.fitInView(self.graphics_scene.itemsBoundingRect(), Qt.KeepAspectRatio)
-
 
     def export_image(self, format):
         file_dialog = QFileDialog(self, "Save Image as {}".format(format.upper()))
