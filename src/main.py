@@ -7,13 +7,55 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QGraphicsPixmapItem, QDialog, QGridLayout,
                                QColorDialog, QFontDialog, QLineEdit, QLabel, QSlider,
                                QMessageBox)  
-from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QTransform
-from PySide6.QtCore import Qt, QSize, QRectF
+from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QTransform, QPainter, QPen
+from PySide6.QtCore import Qt, QSize, QRectF, QPoint
 from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont, ImageQt
 from PIL.ImageQt import ImageQt  
 from component.crop import CropItem
 from component.resize import ResizablePixmapItem
 from component.adjust import AdjustDialog
+
+class DrawingGraphicsView(QGraphicsView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRenderHint(QPainter.Antialiasing)
+        self.drawing = False
+        self.last_point = QPoint()
+        self.pen_color = Qt.red  # Default pen color
+        self.pen_width = 2  # Default pen width
+        self.lines = []  # List to store drawn lines
+
+    def set_pen_color(self, color):
+        self.pen_color = color
+
+    def set_pen_width(self, width):
+        self.pen_width = width
+
+    def start_drawing(self, pos):
+        self.drawing = True
+        self.last_point = pos
+
+    def stop_drawing(self):
+        self.drawing = False
+
+    def draw_line_to(self, pos):
+        if self.drawing:
+            line = (self.last_point, pos)
+            self.lines.append(line)
+            self.scene().addLine(self.last_point.x(), self.last_point.y(), pos.x(), pos.y(), QPen(self.pen_color, self.pen_width))
+            self.last_point = pos
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.start_drawing(event.localPos())  
+
+    def mouseMoveEvent(self, event):
+        if self.drawing:
+            self.draw_line_to(event.localPos()) 
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.stop_drawing()
 
 class ImageEditor(QMainWindow):
     def __init__(self):
@@ -158,7 +200,7 @@ class ImageEditor(QMainWindow):
             self.graphics_view.setCursor(Qt.ArrowCursor)
 
     def create_image_board(self, layout):
-        self.graphics_view = QGraphicsView()
+        self.graphics_view = DrawingGraphicsView(self)
         self.graphics_scene = QGraphicsScene()
         self.graphics_view.setScene(self.graphics_scene)
         self.graphics_view.setAlignment(Qt.AlignCenter)
@@ -185,7 +227,8 @@ class ImageEditor(QMainWindow):
             ("Add Text", self.show_add_text_dialog),
             ("Pick Color", self.activate_color_picker),
             ("Zoom In", self.zoom_in_image), 
-            ("Zoom Out", self.zoom_out_image)
+            ("Zoom Out", self.zoom_out_image),
+            ("Draw", self.toggle_draw_mode)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -196,6 +239,16 @@ class ImageEditor(QMainWindow):
         right_sidebar.addLayout(feature_grid)
         right_sidebar.addStretch()
         layout.addLayout(right_sidebar)
+
+    def toggle_draw_mode(self):
+        current_view = self.graphics_view
+        if isinstance(current_view, DrawingGraphicsView):
+            # If drawing is enabled, disable it
+            current_view.stop_drawing()
+            current_view.drawing = False
+        else:
+            # If not drawing, enable drawing mode
+            current_view.start_drawing()
     
     def zoom_in_image(self):
         if self.current_pixmap is not None:
