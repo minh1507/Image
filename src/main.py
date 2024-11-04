@@ -183,7 +183,9 @@ class ImageEditor(QMainWindow):
             ("Sharpen", self.show_sharpen_popup),
             ("Blur", self.show_blur_popup),
             ("Add Text", self.show_add_text_dialog),
-            ("Pick Color", self.activate_color_picker)
+            ("Pick Color", self.activate_color_picker),
+            ("Zoom In", self.zoom_in_image), 
+            ("Zoom Out", self.zoom_out_image)
         ]
 
         for i, (feature_name, handler) in enumerate(features):
@@ -194,6 +196,19 @@ class ImageEditor(QMainWindow):
         right_sidebar.addLayout(feature_grid)
         right_sidebar.addStretch()
         layout.addLayout(right_sidebar)
+    
+    def zoom_in_image(self):
+        if self.current_pixmap is not None:
+            # Increase the scale factor
+            scale_factor = 1.2  # Scale up by 20%
+            self.graphics_view.scale(scale_factor, scale_factor)  # Scale the view
+            # No need to add the pixmap again; it should automatically reflect zoom.
+        
+    def zoom_out_image(self):
+        if self.current_pixmap is not None:
+            scale_factor = 0.8  # Scale down by 20%
+            self.graphics_view.scale(scale_factor, scale_factor)  # Scale the view
+            # No need to add the pixmap again; it should automatically reflect zoom.
 
     def activate_color_picker(self):
         self.graphics_view.setCursor(Qt.CrossCursor)  
