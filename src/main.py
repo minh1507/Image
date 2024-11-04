@@ -199,16 +199,13 @@ class ImageEditor(QMainWindow):
     
     def zoom_in_image(self):
         if self.current_pixmap is not None:
-            # Increase the scale factor
-            scale_factor = 1.2  # Scale up by 20%
-            self.graphics_view.scale(scale_factor, scale_factor)  # Scale the view
-            # No need to add the pixmap again; it should automatically reflect zoom.
+            scale_factor = 1.2  
+            self.graphics_view.scale(scale_factor, scale_factor)  
         
     def zoom_out_image(self):
         if self.current_pixmap is not None:
-            scale_factor = 0.8  # Scale down by 20%
-            self.graphics_view.scale(scale_factor, scale_factor)  # Scale the view
-            # No need to add the pixmap again; it should automatically reflect zoom.
+            scale_factor = 0.8  
+            self.graphics_view.scale(scale_factor, scale_factor)  
 
     def activate_color_picker(self):
         self.graphics_view.setCursor(Qt.CrossCursor)  
