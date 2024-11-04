@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QMessageBox)  
 from PySide6.QtGui import QAction, QPixmap, QIcon, QFont, QTransform
 from PySide6.QtCore import Qt, QSize, QRectF
-from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont, ImageQt
 from PIL.ImageQt import ImageQt  
 from component.crop import CropItem
 from component.resize import ResizablePixmapItem
@@ -18,7 +18,7 @@ from component.adjust import AdjustDialog
 class ImageEditor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Photoshop-like App")
+        self.setWindowTitle("Redy")
         self.setGeometry(100, 100, 1200, 800)
 
         self.current_contrast = 50  
@@ -32,7 +32,7 @@ class ImageEditor(QMainWindow):
         self.original_image = None  
         self.flipped_image = None  
         self.is_flipped = False  
-        self.current_text_color = Qt.white  # Default text color
+        self.current_text_color = Qt.white  
         
         self.setStyleSheet("""
             QMainWindow {
@@ -226,7 +226,7 @@ class ImageEditor(QMainWindow):
         copy_button = message_box.addButton("Copy", QMessageBox.ActionRole)
         message_box.addButton(QMessageBox.Ok)
 
-        message_box.exec_()
+        message_box.exec()
 
         if message_box.clickedButton() == copy_button:
             clipboard = QApplication.clipboard()
@@ -361,11 +361,22 @@ class ImageEditor(QMainWindow):
             self.current_sharpening = value  
             
     def show_crop_dialog(self):
+        """Show the cropping dialog with the crop overlay item."""
+        q_image = ImageQt(self.current_pixmap)  
+        pixmap = QPixmap.fromImage(q_image)
+
+        self.graphics_scene.clear()
+        self.original_pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.graphics_scene.addItem(self.original_pixmap_item)
+
         self.crop_item = CropItem()
         self.graphics_scene.addItem(self.crop_item)
-        self.graphics_view.setScene(self.graphics_scene)
         self.crop_item.setRect(QRectF(50, 50, 100, 100))  
         self.crop_item.update_resize_handle_position()
+
+        self.crop_widget = QWidget()
+        crop_layout = QVBoxLayout()
+        button_layout = QHBoxLayout()
 
         confirm_button = QPushButton("Confirm Crop")
         confirm_button.clicked.connect(self.confirm_crop)
@@ -373,26 +384,76 @@ class ImageEditor(QMainWindow):
         cancel_button = QPushButton("Cancel Crop")
         cancel_button.clicked.connect(self.cancel_crop)
 
-        self.graphics_scene.addItem(QGraphicsPixmapItem(self.current_pixmap))  
+        button_layout.addWidget(confirm_button)
+        button_layout.addWidget(cancel_button)
+        crop_layout.addLayout(button_layout)
+        self.crop_widget.setLayout(crop_layout)
 
-        self.graphics_view.setScene(self.graphics_scene)  
+        self.graphics_scene.addWidget(self.crop_widget)
+        self.crop_widget.show()
 
         self.graphics_view.setDragMode(QGraphicsView.RubberBandDrag)
 
-        confirm_button.setGeometry(QRectF(10, 10, 100, 30))
-        cancel_button.setGeometry(QRectF(120, 10, 100, 30))
-    
+    def get_crop_rectangle(self):
+        if self.crop_item:
+            rect = self.crop_item.rect()
+            return (rect.x(), rect.y(), rect.width(), rect.height())
+        return None
+
+
     def confirm_crop(self):
-        if self.original_image and self.crop_item:
-            rect = self.crop_item.rect().toRect()
-            cropped_image = self.original_image.crop((rect.x(), rect.y(), rect.x() + rect.width(), rect.y() + rect.height()))
-            self.original_image = cropped_image
-            self.update_image_display()
-            self.graphics_scene.removeItem(self.crop_item)
+        """Confirm cropping, update the image, and remove the crop overlay."""
+        if self.crop_item is not None:
+            try:
+                crop_rect = self.get_crop_rectangle() 
+
+                if crop_rect:
+                    x, y, width, height = crop_rect
+                    pil_image = self.original_image.crop((x, y, x + width, y + height))
+
+                    self.current_pixmap = pil_image
+                    self.update_image(self.current_pixmap)  
+
+                    if self.crop_item.scene() is not None:  
+                        self.graphics_scene.removeItem(self.crop_item)
+                        print("Crop item removed from the scene.")
+                    else:
+                        print("Crop item is already deleted or not in the scene.")
+
+                else:
+                    print("Invalid crop rectangle.")
+
+                self.crop_item = None
+
+            except RuntimeError as e:
+                print(f"Runtime error during confirm crop: {e}")
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+        else:
+            print("No crop item to confirm.")
+
+
 
     def cancel_crop(self):
-        if self.crop_item:
-            self.graphics_scene.removeItem(self.crop_item)
+        """Cancel cropping and remove crop overlay and buttons."""
+        if self.crop_item is not None:
+            try:
+                self.graphics_scene.removeItem(self.crop_item)
+                print("Crop item removed from the scene.")
+            
+                self.crop_item = None  
+
+            except RuntimeError as e:
+                print(f"Runtime error during cancel crop: {e}")
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+
+        if hasattr(self, 'crop_widget') and self.crop_widget is not None:
+            self.crop_widget.hide()
+            self.crop_widget = None 
+
+             
+
 
     def show_flip_dialog(self):
         flip_popup = QDialog(self)
